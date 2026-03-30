@@ -1,4 +1,4 @@
-# Marketing Mix Modelling — Fashion Retail Client
+# Media Mix Modelling — Fashion Retail Client
 
 An econometric analysis of marketing effectiveness for a fashion retail client, built as part of an interview task. The goal is to understand which marketing channels drive sales and whether the current budget allocation is efficient.
 
