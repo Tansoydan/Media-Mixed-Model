@@ -1,3 +1,4 @@
+
 # MEDIA MIX MODELLING
 
 # STEP 1: LOAD & EXPLORE THE DATA
@@ -263,5 +264,3 @@ barplot(contributions_pct, names.arg = group_names, col = group_colors,
         ylab = "% Contribution", border = NA, ylim = c(-5, 60),
         cex.names = 1.1, cex.main = 1.3)
 abline(h = 0, col = "black", lwd = 1)
-
-print(roi_table)
