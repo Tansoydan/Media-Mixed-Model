@@ -82,25 +82,6 @@ All variables are statistically significant. All VIFs below 10 (unemployment at 
 | Marketing | 0.8% | Online (positive), press (caveated) |
 | Controls | -0.9% | Weather, holidays, competition |
 
-## Project Structure
-
-```
-├── data_weekly.csv              # Weekly sales and marketing data
-├── data_monthly.csv             # Monthly macroeconomic indicators
-├── mmm_analysis.R               # Full analysis script
-├── presentation.pptx            # Interview presentation (6 slides)
-└── README.md                    # This file
-```
-
-## How to Run
-
-1. Open the project in RStudio or Posit Cloud.
-2. Ensure `data_weekly.csv` and `data_monthly.csv` are in the working directory.
-3. Install required packages if not already available:
-   ```r
-   install.packages(c("corrplot", "car", "lmtest"))
-   ```
-4. Run `mmm_analysis.R` from top to bottom. The script is structured sequentially — each step depends on the previous one.
 
 ## Tools & Packages
 
