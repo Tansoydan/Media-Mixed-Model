@@ -140,9 +140,6 @@ cat("Adstocked log_tv:", cor(data$log_tv_adstock, data$log_sales), "\n")
 cat("\nRaw log_press:", cor(data$log_press, data$log_sales), "\n")
 cat("Adstocked log_press:", cor(data$log_press_adstock, data$log_sales), "\n")
 
-# lagged sales variable for autocorrelation fix
-data$log_sales_lag <- c(NA, data$log_sales[-nrow(data)])
-
 cat("\nWeeks with radio spend:", sum(data$investment_radio > 0), "out of", nrow(data), "\n")
 
 
@@ -152,7 +149,7 @@ library(car)
 library(lmtest)
 
 # all plausible variables
-model1 <- lm(log_sales ~ log_sales_lag + log_tv_adstock + log_press_adstock + 
+model1 <- lm(log_sales ~ + log_tv_adstock + log_press_adstock + 
                log_online + log_banners + log_economy + log_unemployment + 
                log_confidence + log_gdp + log_tourists + 
                log_competition + log_competition_1 + log_competition_2 +
@@ -164,8 +161,8 @@ model1 <- lm(log_sales ~ log_sales_lag + log_tv_adstock + log_press_adstock +
 summary(model1)
 vif(model1)
 
-# Remove clearly insignificant variables
-model2 <- lm(log_sales ~ log_sales_lag + log_press_adstock + log_online +
+
+model2 <- lm(log_sales ~ log_press_adstock + log_online + log_tv_adstock + log_banners +
                log_economy + log_unemployment + log_confidence + 
                log_tourists + competitor_recognition_1 + 
                brand_knowledge + weather_index +
@@ -175,7 +172,7 @@ model2 <- lm(log_sales ~ log_sales_lag + log_press_adstock + log_online +
 summary(model2)
 vif(model2)
 
-final_model <- lm(log_sales ~ log_sales_lag + log_press_adstock + log_online +
+final_model <- lm(log_sales ~ + log_press_adstock + log_online + log_tv_adstock + log_banners +
                     log_economy + log_unemployment + log_confidence + 
                     log_tourists + competitor_recognition_1 + 
                     weather_index + public_holidays + christmas_dummy,
@@ -185,7 +182,6 @@ summary(final_model)
 vif(final_model)
 
 
-
 # STEP 6: MODEL DIAGNOSTICS & VALIDATION
 
 dwtest(final_model)  
@@ -193,16 +189,28 @@ dwtest(final_model)
 
 plot(final_model, which = 1)  # Residuals vs Fitted
 
-# Actual vs Predicted
-predicted <- fitted(final_model)
-actual <- data$log_sales[!is.na(data$log_sales_lag)]
+library(ggplot2)
 
-plot(data$Date[!is.na(data$log_sales_lag)], actual, type = "l", col = "steelblue", lwd = 2,
-     main = "Actual vs Predicted Sales",
-     xlab = "Date", ylab = "Log Sales")
-lines(data$Date[!is.na(data$log_sales_lag)], predicted, col = "coral", lwd = 2)
-legend("bottomright", legend = c("Actual", "Predicted"), 
-       col = c("steelblue", "coral"), lwd = 2)
+predicted <- fitted(final_model)
+n <- length(predicted)
+
+plot_df <- data.frame(
+  Date = tail(data$Date, n),
+  Actual = tail(data$log_sales, n),
+  Predicted = predicted
+)
+
+ggplot(plot_df, aes(x = Date)) +
+  geom_line(aes(y = Actual, colour = "Actual"), linewidth = 0.8) +
+  geom_line(aes(y = Predicted, colour = "Predicted"), linewidth = 0.8) +
+  scale_colour_manual(values = c("Actual" = "#4A90E2", "Predicted" = "#F5A623")) +
+  labs(
+    title = "Actual vs Predicted Log Sales",
+    subtitle = paste0("R² = ", round(summary(final_model)$r.squared, 3)),
+    x = NULL, y = "Log Sales", colour = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
 
 
 # STEP 7: MODEL INTERPRETATION
@@ -214,53 +222,51 @@ coefs <- data.frame(
 )
 print(coefs)
 
-# Online ROI calculation
-online_elasticity <- coef(final_model)["log_online"]
-avg_sales <- mean(data$sales)
-avg_online <- mean(data$investment_online)
-online_roi <- (online_elasticity * avg_sales) / avg_online
 
-cat("\nOnline elasticity:", round(online_elasticity, 4), "\n")
-cat("Average weekly sales: £", round(avg_sales, 0), "\n")
-cat("Average weekly online spend: £", round(avg_online, 0), "\n")
-cat("Online ROI: £", round(online_roi, 2), "per £1 spent\n")
 
-# Total spend by channel
-cat("\n--- Total spend by channel ---\n")
-cat("Online:", round(sum(data$investment_online), 0), "\n")
-cat("TV:", round(sum(data$investment_tv), 0), "\n")
-cat("Press:", round(sum(data$investment_press), 0), "\n")
-cat("Banners:", round(sum(data$investment_banners), 0), "\n")
-cat("Radio:", round(sum(data$investment_radio), 0), "\n")
 
-# Sales decomposition
-model_data <- model.matrix(final_model)
-avg_values <- colMeans(model_data, na.rm = TRUE)
-contributions <- coef(final_model) * avg_values
+library(ggplot2)
 
-base <- sum(contributions[c("(Intercept)", "log_sales_lag")])
-macro <- sum(contributions[c("log_economy", "log_unemployment", "log_confidence", "log_tourists")])
-marketing <- sum(contributions[c("log_online", "log_press_adstock")])
-controls <- sum(contributions[c("competitor_recognition_1", "weather_index", "public_holidays", "christmas_dummy")])
-total <- base + macro + marketing + controls
-
-cat("\n--- Sales Contribution by Group ---\n")
-cat("Base:", round(base/total * 100, 1), "%\n")
-cat("Macro:", round(macro/total * 100, 1), "%\n")
-cat("Marketing:", round(marketing/total * 100, 1), "%\n")
-cat("Controls:", round(controls/total * 100, 1), "%\n")
-
-contributions_pct <- c(
-  round(base/total * 100, 1),
-  round(macro/total * 100, 1),
-  round(marketing/total * 100, 1),
-  round(controls/total * 100, 1)
+groups_df <- data.frame(
+  Group = c("Macro", "Marketing", "Competition", "External"),
+  Elasticity = c(
+    sum(coef(final_model)[c("log_economy", "log_unemployment", 
+                            "log_confidence", "log_tourists")]),
+    sum(coef(final_model)[c("log_online", "log_tv_adstock", 
+                            "log_banners", "log_press_adstock")]),
+    coef(final_model)["competitor_recognition_1"],
+    sum(coef(final_model)[c("weather_index", "public_holidays", 
+                            "christmas_dummy")])
+  )
 )
-group_names <- c("Base", "Macro", "Marketing", "Controls")
-group_colors <- c("#1B3A5C", "#E74C3C", "#3B7DD8", "#95A5A6")
 
-barplot(contributions_pct, names.arg = group_names, col = group_colors,
-        main = "Sales Contribution by Group (%)",
-        ylab = "% Contribution", border = NA, ylim = c(-5, 60),
-        cex.names = 1.1, cex.main = 1.3)
-abline(h = 0, col = "black", lwd = 1)
+
+groups_df <- groups_df[order(abs(groups_df$Elasticity), decreasing = FALSE), ]
+groups_df$Group <- factor(groups_df$Group, levels = groups_df$Group)
+
+groups_df$Direction <- ifelse(groups_df$Elasticity > 0, "Positive", "Negative")
+
+ggplot(groups_df, aes(x = Group, y = Elasticity, fill = Direction)) +
+  geom_col(width = 0.65) +
+  geom_text(aes(label = sprintf("%+.2f", Elasticity),
+                hjust = ifelse(Elasticity > 0, -0.15, 1.15)),
+            size = 4.2, colour = "grey20") +
+  scale_fill_manual(values = c("Positive" = "#3B7DD8", "Negative" = "#E74C3C")) +
+  coord_flip() +
+  labs(
+    title = "What drives sales?",
+    subtitle = "Net elasticity by driver group (sum of model coefficients)",
+    x = NULL, y = "Net elasticity",
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(colour = "grey40", margin = margin(b = 12)),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(size = 12)
+  ) +
+  expand_limits(y = c(min(groups_df$Elasticity) * 1.4, 
+                      max(groups_df$Elasticity) * 1.4))
+
